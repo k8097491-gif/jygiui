@@ -1,0 +1,42 @@
+name: checks
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm lint
+      - run: pnpm build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r analytics-requirements.txt
+      - run: python -m unittest analytics_test -v
+      - name: Start full stack
+        run: |
+          cp .env.example .env
+          docker compose up -d --build
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail http://127.0.0.1:3000/health
+      - name: Verify database integration and API flows
+        run: |
+          docker compose exec -T api node --test integration.test.js
+          docker compose exec -T api node smoke.js
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v

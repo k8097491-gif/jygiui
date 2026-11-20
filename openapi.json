@@ -1,0 +1,207 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Campus IT Helpdesk REST API",
+    "version": "1.0.0",
+    "description": "REST endpoints for the Campus IT Helpdesk application. Sessions are stored in an HttpOnly cookie. GraphQL is available separately at /graphql."
+  },
+  "servers": [{ "url": "/" }],
+  "tags": [
+    { "name": "Authentication" },
+    { "name": "Profile and accounts" },
+    { "name": "Requests" },
+    { "name": "Service data" },
+    { "name": "System" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"], "summary": "Check the API and data services",
+        "responses": { "200": { "$ref": "#/components/responses/Health" }, "503": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/health/live": {
+      "get": { "tags": ["System"], "summary": "Check that the API process is alive", "responses": { "200": { "description": "Process is alive." } } }
+    },
+    "/api/config": {
+      "get": { "tags": ["System"], "summary": "Read public application configuration", "responses": { "200": { "description": "Public feature flags.", "content": { "application/json": { "schema": { "type": "object", "properties": { "demoAvailable": { "type": "boolean" } }, "required": ["demoAvailable"] } } } } }
+    }},
+    "/api/openapi.json": {
+      "get": { "tags": ["System"], "summary": "Get this API specification", "responses": { "200": { "description": "OpenAPI 3.1 JSON document.", "content": { "application/json": { "schema": { "type": "object" } } } } } }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": ["Authentication"], "summary": "Create a requester account and sign in",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Register" } } } },
+        "responses": { "201": { "$ref": "#/components/responses/SessionUser" }, "409": { "$ref": "#/components/responses/Error" }, "422": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Authentication"], "summary": "Sign in",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Credentials" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/SessionUser" }, "401": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/auth/demo": {
+      "post": {
+        "tags": ["Authentication"], "summary": "Sign in to a fictional demonstration role",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "role": { "$ref": "#/components/schemas/Role" } } } } } },
+        "responses": { "200": { "$ref": "#/components/responses/SessionUser" }, "404": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/auth/logout": {
+      "post": { "tags": ["Authentication"], "summary": "Revoke the current session", "security": [{ "sessionCookie": [] }], "responses": { "204": { "description": "Signed out." }, "401": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/api/me": {
+      "get": { "tags": ["Profile and accounts"], "summary": "Get the current account", "security": [{ "sessionCookie": [] }], "responses": { "200": { "$ref": "#/components/responses/SessionUser" }, "401": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/api/profile": {
+      "put": {
+        "tags": ["Profile and accounts"], "summary": "Update the current account name and email", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Profile" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/SessionUser" }, "409": { "$ref": "#/components/responses/Error" }, "422": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/users": {
+      "get": { "tags": ["Profile and accounts"], "summary": "List accounts (admin)", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Account list." }, "403": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/api/users/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "put": {
+        "tags": ["Profile and accounts"], "summary": "Update account details, role or active state (admin)", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserUpdate" } } } },
+        "responses": { "200": { "description": "Updated account." }, "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } }
+      },
+      "delete": { "tags": ["Profile and accounts"], "summary": "Disable an account and revoke its sessions (admin)", "security": [{ "sessionCookie": [] }], "responses": { "204": { "description": "Account disabled." }, "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/api/specialists": {
+      "get": { "tags": ["Profile and accounts"], "summary": "List active specialists (support roles)", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Specialists available for assignment." }, "403": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/api/requesters": {
+      "get": { "tags": ["Profile and accounts"], "summary": "List active requesters (dispatcher, manager or admin)", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Requesters available when creating a ticket." }, "403": { "$ref": "#/components/responses/Error" } }
+    }},
+    "/api/tickets": {
+      "get": {
+        "tags": ["Requests"], "summary": "List visible requests",
+        "security": [{ "sessionCookie": [] }],
+        "parameters": [
+          { "name": "query", "in": "query", "schema": { "type": "string", "maxLength": 100 } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "priority", "in": "query", "schema": { "type": "string", "enum": ["Low", "Normal", "High", "Critical"] } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100 } }
+        ],
+        "responses": { "200": { "description": "Requests scoped by the signed-in role." } }
+      },
+      "post": {
+        "tags": ["Requests"], "summary": "Create and route a support request", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NewTicket" } } } },
+        "responses": { "201": { "description": "Created request." }, "422": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/tickets/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "get": { "tags": ["Requests"], "summary": "Read a request and visible history", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Request detail." }, "404": { "$ref": "#/components/responses/Error" } } },
+      "put": {
+        "tags": ["Requests"], "summary": "Replace request details", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NewTicket" } } } },
+        "responses": { "200": { "description": "Updated request." }, "409": { "$ref": "#/components/responses/Error" }, "422": { "$ref": "#/components/responses/Error" } }
+      },
+      "patch": {
+        "tags": ["Requests"], "summary": "Partially update request details", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "category": { "type": "string" }, "impact": { "$ref": "#/components/schemas/Impact" }, "urgency": { "$ref": "#/components/schemas/Urgency" } } } } } },
+        "responses": { "200": { "description": "Updated request." }, "409": { "$ref": "#/components/responses/Error" }, "422": { "$ref": "#/components/responses/Error" } }
+      },
+      "delete": { "tags": ["Requests"], "summary": "Delete a new request (requester)", "security": [{ "sessionCookie": [] }], "responses": { "204": { "description": "Request deleted." }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/api/tickets/{id}/comments": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "tags": ["Requests"], "summary": "Add a public comment or internal staff note", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["body"], "properties": { "body": { "type": "string", "minLength": 2, "maxLength": 800 }, "visibility": { "type": "string", "enum": ["public", "internal"], "default": "public" } } } } } },
+        "responses": { "201": { "description": "Comment created." }, "422": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/tickets/{id}/transitions": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "tags": ["Requests"], "summary": "Move a request through its lifecycle", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Transition" } } } },
+        "responses": { "200": { "description": "Updated request." }, "409": { "$ref": "#/components/responses/Error" }, "422": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/tickets/{id}/assignment": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Requests"], "summary": "Assign a specialist and support group", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["assigneeId", "group", "reason"], "properties": { "assigneeId": { "type": "string", "format": "uuid" }, "group": { "type": "string" }, "reason": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Updated assignment." }, "403": { "$ref": "#/components/responses/Error" }, "422": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/tickets/{id}/rating": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "tags": ["Requests"], "summary": "Rate a closed request (requester)", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["score"], "properties": { "score": { "type": "integer", "minimum": 1, "maximum": 5 }, "comment": { "type": "string", "maxLength": 280 } } } } } },
+        "responses": { "200": { "description": "Saved feedback." }, "409": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/categories": {
+      "get": { "tags": ["Service data"], "summary": "List active service categories", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Active categories." } } },
+      "post": {
+        "tags": ["Service data"], "summary": "Create a service category (admin)", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } },
+        "responses": { "201": { "description": "Category created." }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/categories/{name}": {
+      "parameters": [{ "name": "name", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "put": {
+        "tags": ["Service data"], "summary": "Rename or reroute a service category (admin)", "security": [{ "sessionCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } },
+        "responses": { "200": { "description": "Updated category." }, "404": { "$ref": "#/components/responses/Error" } }
+      },
+      "delete": { "tags": ["Service data"], "summary": "Deactivate a service category (admin)", "security": [{ "sessionCookie": [] }], "responses": { "204": { "description": "Category deactivated." }, "404": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/api/knowledge": {
+      "get": { "tags": ["Service data"], "summary": "List published support guides", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Published articles and steps." } } }
+    },
+    "/api/notifications": {
+      "get": { "tags": ["Service data"], "summary": "List the current user's notifications", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Recent notifications and unread count." } } }
+    },
+    "/api/notifications/read-all": {
+      "patch": { "tags": ["Service data"], "summary": "Mark all current user's notifications as read", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Notifications marked read." } } }
+    },
+    "/api/notifications/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": { "tags": ["Service data"], "summary": "Mark a notification as read", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Notification marked read." }, "404": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/api/analytics": {
+      "get": { "tags": ["Service data"], "summary": "Get role-scoped request analytics", "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Counts, category breakdown and average rating." }, "503": { "$ref": "#/components/responses/Error" } } }
+    }
+  },
+  "components": {
+    "securitySchemes": { "sessionCookie": { "type": "apiKey", "in": "cookie", "name": "campus_session", "description": "Issued by the login and registration endpoints." } },
+    "parameters": { "Id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } } },
+    "responses": {
+      "Error": { "description": "The request could not be completed.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Health": { "description": "All configured services are available.", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "const": "ok" }, "checks": { "type": "object", "additionalProperties": { "type": "boolean" } } } } } } },
+      "SessionUser": { "description": "Current account. Login and registration also set the HttpOnly session cookie.", "headers": { "Set-Cookie": { "schema": { "type": "string" }, "description": "HttpOnly campus_session cookie." } }, "content": { "application/json": { "schema": { "type": "object", "properties": { "user": { "$ref": "#/components/schemas/User" } } } } } }
+    },
+    "schemas": {
+      "Error": { "type": "object", "properties": { "error": { "type": "object", "properties": { "code": { "type": "string" }, "message": { "type": "string" }, "details": { "type": "array", "items": { "type": "object" } }, "requestId": { "type": "string" } }, "required": ["code", "message"] } }, "required": ["error"] },
+      "Role": { "type": "string", "enum": ["requester", "specialist", "dispatcher", "manager", "admin"] },
+      "User": { "type": "object", "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" }, "email": { "type": "string", "format": "email" }, "role": { "$ref": "#/components/schemas/Role" }, "team": { "type": ["string", "null"] } }, "required": ["id", "name", "email", "role"] },
+      "Credentials": { "type": "object", "required": ["email", "password"], "properties": { "email": { "type": "string", "format": "email", "maxLength": 254 }, "password": { "type": "string", "minLength": 1, "maxLength": 128 } } },
+      "Register": { "type": "object", "required": ["name", "email", "password"], "properties": { "name": { "type": "string", "minLength": 2, "maxLength": 100 }, "email": { "type": "string", "format": "email", "maxLength": 254 }, "password": { "type": "string", "minLength": 12, "maxLength": 128 } } },
+      "Profile": { "type": "object", "required": ["name", "email"], "properties": { "name": { "type": "string", "minLength": 2, "maxLength": 100 }, "email": { "type": "string", "format": "email", "maxLength": 254 } } },
+      "UserUpdate": { "type": "object", "required": ["name", "email", "role", "active"], "properties": { "name": { "type": "string" }, "email": { "type": "string", "format": "email" }, "role": { "$ref": "#/components/schemas/Role" }, "team": { "type": "string", "maxLength": 120, "description": "Required when role is specialist." }, "active": { "type": "boolean" } } },
+      "Impact": { "type": "string", "enum": ["One person", "Several people", "Teaching activity"] },
+      "Urgency": { "type": "string", "enum": ["Low", "Normal", "Urgent"] },
+      "NewTicket": { "type": "object", "required": ["title", "description", "category", "impact", "urgency"], "properties": { "title": { "type": "string", "minLength": 5, "maxLength": 120 }, "description": { "type": "string", "minLength": 15, "maxLength": 1200 }, "category": { "type": "string" }, "impact": { "$ref": "#/components/schemas/Impact" }, "urgency": { "$ref": "#/components/schemas/Urgency" }, "requesterId": { "type": "string", "format": "uuid", "description": "Required for a dispatcher, manager or admin creating a ticket on behalf of a requester." } } },
+      "Transition": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["New", "Assigned", "In progress", "Waiting", "Escalated", "Resolved", "Closed", "Reopened"] }, "reason": { "type": "string", "maxLength": 400 }, "resolution": { "type": "string", "maxLength": 1000 } } },
+      "Category": { "type": "object", "required": ["name", "group"], "properties": { "name": { "type": "string", "minLength": 2, "maxLength": 120 }, "group": { "type": "string", "minLength": 2, "maxLength": 120 } } }
+    }
+  }
+}

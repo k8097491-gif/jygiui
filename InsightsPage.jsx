@@ -1,0 +1,15 @@
+import { useQuery } from "@tanstack/react-query";
+import { Activity,Clock3,Star,Ticket } from "lucide-react";
+import { api } from "./api.js";
+import { EmptyState,ErrorState,PageHeading,Skeleton } from "./ui.jsx";
+
+function Stat({label,value,icon:Icon}) {
+ return <div className="border border-ink/10 bg-white p-5 dark:border-white/10 dark:bg-ink-deep"><div className="flex items-center justify-between text-muted dark:text-white/45"><span className="text-sm">{label}</span><Icon size={17}/></div><strong className="mt-5 block text-4xl font-semibold tracking-tight text-ink dark:text-white">{value}</strong></div>;
+}
+export default function InsightsPage(){
+ const report=useQuery({queryKey:["analytics"],queryFn:async function(){return api("/api/analytics");}});
+ return <div>
+  <PageHeading title="Service insights" description="A role-scoped summary calculated from the request database. Values reflect the fictional records in this demonstration."/>
+  {report.isLoading?<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-busy="true" aria-label="Loading analytics">{[1,2,3,4].map(function(n){return <Skeleton className="h-36" key={n}/>})}</div>:report.isError?<ErrorState title="Service report could not load" message={report.error.message} onRetry={()=>report.refetch()}/>:<><section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Service summary"><Stat label="Visible requests" value={report.data.total} icon={Ticket}/><Stat label="Currently open" value={report.data.open} icon={Activity}/><Stat label="Past target" value={report.data.overdue} icon={Clock3}/><Stat label="Average rating" value={report.data.averageRating===null?"—":report.data.averageRating.toFixed(1)} icon={Star}/></section><section className="mt-5 border border-ink/10 bg-white p-5 dark:border-white/10 dark:bg-ink-deep sm:p-8"><h2 className="text-xl font-semibold tracking-tight text-ink dark:text-white">Requests by category</h2><p className="mt-1 text-sm text-muted dark:text-white/45">Sorted by the number of visible requests.</p>{report.data.byCategory.length===0?<div className="mt-5"><EmptyState title="No category activity yet" description="Category totals will appear when requests are created."/></div>:<div className="mt-7 grid gap-5">{report.data.byCategory.map(function(item){const max=Math.max(1,...report.data.byCategory.map(function(row){return row.count;}));return <div key={item.name} className="grid grid-cols-[minmax(0,1fr)_3rem] gap-x-4 gap-y-2"><span className="text-sm font-medium">{item.name}</span><strong className="text-right text-sm">{item.count}</strong><div className="col-span-2 h-2 bg-campus dark:bg-white/10"><span className="block h-2 bg-signal" style={{width:(item.count/max*100)+"%"}}/></div></div>;})}</div>}<p className="mt-8 border-t border-ink/10 pt-4 text-xs leading-5 text-muted dark:border-white/10 dark:text-white/40">Analytics are computed by the separate Python service against PostgreSQL. Requester and specialist views are restricted to their own tickets.</p></section></>}
+ </div>;
+}
